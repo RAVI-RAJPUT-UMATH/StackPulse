@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#172b4d" />
+    <title>Programming Language Trends Dashboard</title>
+    <script>
+        // Apply the saved theme before first paint so there is no flash of the
+        // wrong palette. No stored value means "follow the OS".
+        try {
+            var savedTheme = localStorage.getItem("theme");
+            if (savedTheme === "dark" || savedTheme === "light") {
+                document.documentElement.setAttribute("data-theme", savedTheme);
+            }
+        } catch (e) { /* storage blocked - fall back to the OS preference */ }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ============================================================
+           Design tokens
+           ============================================================ */
+        :root {
+            /* Brand palette */
+            --primary: #5e72e4;
+            --primary-dk: #4c5fd7;
+            --info: #11cdef;
+            --success: #2dce89;
+            --warning: #fb6340;
+            --danger: #f5365c;
+            --purple: #8965e0;
+
+            --grad-primary: linear-gradient(87deg, #5e72e4 0, #825ee4 100%);
+            --grad-info: linear-gradient(87deg, #11cdef 0, #1171ef 100%);
+            --grad-success: linear-gradient(87deg, #2dce89 0, #2dcecc 100%);
+            --grad-warning: linear-gradient(87deg, #fb6340 0, #fbb140 100%);
+            --grad-danger: linear-gradient(87deg, #f5365c 0, #f56036 100%);
+            --grad-hero: linear-gradient(87deg, #172b4d 0, #1a174d 100%);
+
+            /* Surfaces */
+            --bg: #f7f8fc;
+            --surface: #ffffff;
+            --surface-2: #f6f9fc;
+            --surface-3: #eef1f7;
+            --border: #e9ecef;
+            --sidebar-bg: #ffffff;
+            --sidebar-text: #525f7f;
+            --sidebar-muted: #8898aa;
+
+            /* Type */
+            --heading: #32325d;
+            --text: #525f7f;
+            --text-muted: #8898aa;
+
+            /* Depth */
+            --shadow-sm: 0 0 1rem 0 rgba(136, 152, 170, .12);
+            --shadow-md: 0 .5rem 1.5rem rgba(50, 50, 93, .1), 0 .25rem .6rem rgba(0, 0, 0, .06);
+            --shadow-lg: 0 1rem 2.5rem rgba(50, 50, 93, .14), 0 .5rem 1rem rgba(0, 0, 0, .08);
+            --shadow-nav: 0 0 2rem 0 rgba(136, 152, 170, .15);
+
+            --radius: 14px;
+            --radius-sm: 10px;
+            --sidebar-w: 262px;
+            --header-h: 68px;
+            --hero-h: 210px;
+        }
+
+        /* Dark palette: OS-dark unless the user explicitly picked light,
+           or whenever the toggle sets data-theme="dark". */
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #0b1020;
+                --surface: #151b2e;
+                --surface-2: #1a2138;
+                --surface-3: #222a44;
+                --border: #262f4a;
+                --sidebar-bg: #111729;
+                --sidebar-text: #b9c2d8;
+                --sidebar-muted: #6b7796;
+                --heading: #eef1f8;
+                --text: #b9c2d8;
+                --text-muted: #7f8bab;
+                --grad-hero: linear-gradient(87deg, #16203b 0, #1c1a44 100%);
+                --shadow-sm: 0 0 1rem 0 rgba(0, 0, 0, .45);
+                --shadow-md: 0 .5rem 1.5rem rgba(0, 0, 0, .5);
+                --shadow-lg: 0 1rem 2.5rem rgba(0, 0, 0, .55);
+                --shadow-nav: 0 0 2rem 0 rgba(0, 0, 0, .5);
+            }
+        }
+
+        :root[data-theme="dark"] {
+            --bg: #0b1020;
+            --surface: #151b2e;
+            --surface-2: #1a2138;
+            --surface-3: #222a44;
+            --border: #262f4a;
+            --sidebar-bg: #111729;
+            --sidebar-text: #b9c2d8;
+            --sidebar-muted: #6b7796;
+            --heading: #eef1f8;
+            --text: #b9c2d8;
+            --text-muted: #7f8bab;
+            --grad-hero: linear-gradient(87deg, #16203b 0, #1c1a44 100%);
+            --shadow-sm: 0 0 1rem 0 rgba(0, 0, 0, .45);
+            --shadow-md: 0 .5rem 1.5rem rgba(0, 0, 0, .5);
+            --shadow-lg: 0 1rem 2.5rem rgba(0, 0, 0, .55);
+            --shadow-nav: 0 0 2rem 0 rgba(0, 0, 0, .5);
+        }
+
+        /* ============================================================
+           Base
+           ============================================================ */
+        * { box-sizing: border-box; }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Open Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3, .num {
+            font-family: 'Inter', 'Open Sans', sans-serif;
+            color: var(--heading);
+            letter-spacing: -.015em;
+        }
+
+        ::selection { background: rgba(94, 114, 228, .22); }
+
+        /* Scrollbars */
+        .sidebar ::-webkit-scrollbar,
+        .language-buttons::-webkit-scrollbar { width: 6px; }
+        .language-buttons::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 99px;
+        }
+        .language-buttons::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* ============================================================
+           Layout shell
+           ============================================================ */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+            grid-template-rows: var(--header-h) minmax(0, 1fr);
+            grid-template-areas:
+                "sidebar header"
+                "sidebar main";
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+
+        /* ============================================================
+           Sidebar
+           ============================================================ */
+        .sidebar {
+            grid-area: sidebar;
+            background: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            box-shadow: var(--shadow-nav);
+            padding: 20px 16px calc(16px + env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            height: 100dvh;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            z-index: 50;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand-mark {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            border-radius: 11px;
+            background: var(--grad-primary);
+            display: grid;
+            place-items: center;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(94, 114, 228, .4);
+            transition: transform .35s cubic-bezier(.34, 1.56, .64, 1);
+        }
+
+        .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.06); }
+
+        .brand-text { min-width: 0; }
+
+        .brand-text strong {
+            display: block;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--heading);
+            line-height: 1.2;
+            letter-spacing: -.02em;
+        }
+
+        .brand-text small {
+            font-size: 10px;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .nav-heading {
+            margin: 0;
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .nav-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin: -4px 0 0;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            padding: 9px 11px;
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            transition: background-color .2s ease, color .2s ease, transform .2s ease;
+        }
+
+        .nav-link .nav-ico {
+            width: 28px;
+            height: 28px;
+            flex: 0 0 28px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
+        }
+
+        .nav-ico.i-primary { background: var(--grad-primary); }
+        .nav-ico.i-info { background: var(--grad-info); }
+        .nav-ico.i-success { background: var(--grad-success); }
+        .nav-ico.i-warning { background: var(--grad-warning); }
+
+        .nav-link:hover {
+            background: var(--surface-2);
+            color: var(--primary);
+            transform: translateX(3px);
+        }
+
+        .nav-link:hover .nav-ico { transform: scale(1.1); }
+
+        .nav-link.active {
+            background: rgba(94, 114, 228, .1);
+            color: var(--primary);
+        }
+
+        .sidebar-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 2px 0;
+        }
+
+        /* Search */
+        .search-box { position: relative; }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 12px 10px 36px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13.5px;
+            transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+        }
+
+        .search-box input::placeholder { color: var(--text-muted); }
+
+        .search-box input:focus {
+            outline: none;
+            background: var(--surface);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(94, 114, 228, .15);
+        }
+
+        .search-box svg {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 15px;
+            height: 15px;
+            color: var(--text-muted);
+            pointer-events: none;
+            transition: color .2s ease;
+        }
+
+        .search-box input:focus + svg,
+        .search-box:focus-within svg { color: var(--primary); }
+
+        /* Buttons */
+        .btn-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .btn {
+            position: relative;
+            padding: 10px 14px;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12.5px;
+            font-weight: 600;
+            letter-spacing: .01em;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            overflow: hidden;
+            transition: transform .18s ease, box-shadow .25s ease, background-color .2s ease, color .2s ease, border-color .2s ease;
+        }
+
+        .btn:hover { transform: translateY(-1px); }
+        .btn:active { transform: translateY(0) scale(.98); }
+
+        .btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(94, 114, 228, .35);
+        }
+
+        .btn-primary {
+            background: var(--grad-primary);
+            color: #fff;
+            box-shadow: 0 4px 10px rgba(94, 114, 228, .3);
+        }
+
+        .btn-primary:hover { box-shadow: 0 7px 16px rgba(94, 114, 228, .42); }
+
+        .btn-ghost {
+            background: var(--surface);
+            color: var(--text);
+            border-color: var(--border);
+        }
+
+        .btn-ghost:hover {
+            background: var(--surface-2);
+            color: var(--heading);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-accent {
+            width: 100%;
+            background: var(--grad-success);
+            color: #fff;
+            box-shadow: 0 4px 10px rgba(45, 206, 137, .3);
+        }
+
+        .btn-accent:hover { box-shadow: 0 7px 16px rgba(45, 206, 137, .42); }
+
+        /* Language chips */
+        .lang-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1 1 auto;
+            min-height: 140px;
+        }
+
+        .lang-panel-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .count-pill {
+            font-family: 'Inter', sans-serif;
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(94, 114, 228, .12);
+            color: var(--primary);
+        }
+
+        .language-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            align-content: start;
+            overflow-y: auto;
+            flex: 1 1 auto;
+            padding-right: 3px;
+            min-height: 120px;
+        }
+
+        .lang-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 9px;
+            background: var(--surface-2);
+            border: 1px solid transparent;
+            color: var(--text);
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            overflow: hidden;
+            transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+        }
+
+        .lang-btn:hover {
+            background: var(--surface-3);
+            transform: translateY(-1px);
+        }
+
+        .lang-btn:has(input:checked) {
+            background: rgba(94, 114, 228, .12);
+            border-color: rgba(94, 114, 228, .45);
+            color: var(--primary);
+        }
+
+        .lang-btn:has(input:focus-visible) {
+            box-shadow: 0 0 0 3px rgba(94, 114, 228, .25);
+        }
+
+        .lang-btn input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 15px;
+            height: 15px;
+            flex: 0 0 15px;
+            margin: 0;
+            border: 1.5px solid var(--text-muted);
+            border-radius: 5px;
+            cursor: pointer;
+            position: relative;
+            transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+        }
+
+        .lang-btn input[type="checkbox"]:checked {
+            background: var(--grad-primary);
+            border-color: transparent;
+        }
+
+        .lang-btn input[type="checkbox"]:checked::after {
+            content: "";
+            position: absolute;
+            left: 4.5px;
+            top: 1px;
+            width: 4px;
+            height: 8px;
+            border: solid #fff;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            animation: pop .22s cubic-bezier(.34, 1.56, .64, 1);
+        }
+
+        .lang-btn input[type="checkbox"]:active { transform: scale(.9); }
+
+        .lang-btn span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .no-results {
+            grid-column: 1 / -1;
+            font-size: 12.5px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 14px 4px;
+        }
+
+        /* Credit */
+        .credit {
+            margin-top: auto;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
+            text-align: left;
+        }
+
+        .credit a {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text);
+            text-decoration: none;
+            padding: 7px 13px;
+            border-radius: 999px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            transition: color .2s ease, border-color .2s ease, transform .2s ease, box-shadow .25s ease;
+        }
+
+        .credit a:hover {
+            color: var(--primary);
+            border-color: rgba(94, 114, 228, .45);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .heart {
+            color: var(--danger);
+            display: inline-block;
+            animation: beat 1.9s ease-in-out infinite;
+        }
+
+        /* ============================================================
+           Header
+           ============================================================ */
+        .header {
+            grid-area: header;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 0 clamp(16px, 2.6vw, 30px);
+            background: var(--grad-hero);
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: clamp(15px, 2.2vw, 19px);
+            font-weight: 700;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, .6);
+            white-space: nowrap;
+        }
+
+        .breadcrumb span { color: rgba(255, 255, 255, .9); font-weight: 600; }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, .22);
+            border-radius: 11px;
+            background: rgba(255, 255, 255, .1);
+            color: #fff;
+            cursor: pointer;
+            transition: background-color .2s ease, border-color .2s ease, transform .18s ease;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, .2);
+            border-color: rgba(255, 255, 255, .4);
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:active { transform: scale(.94); }
+
+        .icon-btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, .35);
+        }
+
+        .menu-btn { display: none; }
+
+        /* Sun in dark mode, moon in light mode */
+        .theme-toggle .icon-sun { display: none; }
+        :root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+        :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+            :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+        }
+
+        .header-credit {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #fff;
+            text-decoration: none;
+            white-space: nowrap;
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .22);
+            background: rgba(255, 255, 255, .1);
+            transition: background-color .2s ease, border-color .2s ease, transform .2s ease;
+        }
+
+        .header-credit:hover {
+            background: rgba(255, 255, 255, .2);
+            border-color: rgba(255, 255, 255, .4);
+            transform: translateY(-1px);
+        }
+
+        /* ============================================================
+           Main + hero band
+           ============================================================ */
+        .main {
+            grid-area: main;
+            position: relative;
+            padding: 0 clamp(16px, 2.6vw, 30px) clamp(20px, 3vw, 34px);
+            min-width: 0;
+        }
+
+        /* Gradient band that the first row of cards overlaps */
+        .hero {
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: var(--hero-h);
+            background: var(--grad-hero);
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            right: -6%;
+            top: -60%;
+            width: 460px;
+            height: 460px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(94, 114, 228, .38) 0%, transparent 68%);
+            pointer-events: none;
+        }
+
+        .hero-copy {
+            position: relative;
+            z-index: 1;
+            padding: 26px 0 0;
+            color: rgba(255, 255, 255, .78);
+            max-width: 680px;
+        }
+
+        .hero-copy h2 {
+            margin: 0 0 4px;
+            font-size: clamp(19px, 3vw, 26px);
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .hero-copy p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(16px, 2vw, 24px);
+            padding-top: 22px;
+        }
+
+        /* ============================================================
+           Cards
+           ============================================================ */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            padding: clamp(16px, 2vw, 22px);
+            min-width: 0;
+            transition: transform .28s ease, box-shadow .28s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Stat cards */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+            gap: clamp(12px, 1.6vw, 20px);
+        }
+
+        .stat-card { padding: 18px 20px; }
+
+        .stat-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .stat-card .label {
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .stat-card .value {
+            font-family: 'Inter', sans-serif;
+            font-size: clamp(20px, 2.6vw, 27px);
+            font-weight: 700;
+            color: var(--heading);
+            line-height: 1.2;
+            margin-top: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .stat-ico {
+            width: 46px;
+            height: 46px;
+            flex: 0 0 46px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            color: #fff;
+            transition: transform .3s cubic-bezier(.34, 1.56, .64, 1);
+        }
+
+        .card:hover .stat-ico { transform: scale(1.08) rotate(4deg); }
+
+        .i-primary { background: var(--grad-primary); box-shadow: 0 4px 12px rgba(94, 114, 228, .35); }
+        .i-info { background: var(--grad-info); box-shadow: 0 4px 12px rgba(17, 205, 239, .35); }
+        .i-success { background: var(--grad-success); box-shadow: 0 4px 12px rgba(45, 206, 137, .35); }
+        .i-warning { background: var(--grad-warning); box-shadow: 0 4px 12px rgba(251, 99, 64, .35); }
+        .i-danger { background: var(--grad-danger); box-shadow: 0 4px 12px rgba(245, 54, 92, .35); }
+
+        .stat-foot {
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .delta {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-weight: 700;
+        }
+
+        .delta.up { color: var(--success); }
+        .delta.down { color: var(--danger); }
+        .delta.flat { color: var(--text-muted); }
+
+        /* Card headers */
+        .card-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .card-head .eyebrow {
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin: 0 0 1px;
+        }
+
+        .card-head h2 {
+            margin: 0;
+            font-size: clamp(15px, 1.9vw, 18px);
+            font-weight: 700;
+        }
+
+        .badge {
+            font-family: 'Inter', sans-serif;
+            font-size: 10.5px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            padding: 5px 11px;
+            border-radius: 999px;
+            background: rgba(94, 114, 228, .12);
+            color: var(--primary);
+            white-space: nowrap;
+        }
+
+        .badge.b-info { background: rgba(17, 205, 239, .14); color: #0ba5c1; }
+        .badge.b-success { background: rgba(45, 206, 137, .14); color: #24a06c; }
+
+        .card-desc {
+            font-size: 13.5px;
+            color: var(--text-muted);
+            margin: 9px 0 14px;
+            max-width: 80ch;
+        }
+
+        /* Feature (dark) chart card - stays dark in both themes, like Argon */
+        .card-feature {
+            background: var(--grad-hero);
+            border-color: transparent;
+            color: rgba(255, 255, 255, .72);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-feature::before {
+            content: "";
+            position: absolute;
+            right: -70px;
+            top: -110px;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(94, 114, 228, .3) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .card-feature h2 { color: #fff; }
+        .card-feature .eyebrow { color: rgba(255, 255, 255, .55); }
+        .card-feature .card-desc { color: rgba(255, 255, 255, .62); }
+        .card-feature .badge { background: rgba(255, 255, 255, .14); color: #fff; }
+
+        /* Chart grid */
+        /* hidden must beat the display values set on .stats / .cta / .chart-grid */
+        [hidden] { display: none !important; }
+
+        /* ---------- Solo (full-page) section views ----------
+           One card fills the screen below the header, and its chart grows to
+           take whatever height is left over. */
+        .content.solo { padding-bottom: 4px; }
+
+        /* Height is pinned to the viewport (minus header, hero copy and
+           padding) so the card fills one screen instead of overflowing it. */
+        /* The card's own heading is the section title in a solo view */
+        body.solo .hero-copy { display: none; }
+
+        .content.solo .card {
+            display: flex;
+            flex-direction: column;
+            height: calc(100dvh - var(--header-h) - 132px);
+            min-height: 360px;
+        }
+
+        /* min-height:0 lets the chart shrink inside the flex column, so it
+           always fits whatever space the heading leaves behind. */
+        .content.solo .canvas-wrap,
+        .content.solo .canvas-wrap.tall,
+        .content.solo .canvas-wrap.pie {
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
+            margin-top: 12px;
+        }
+
+        /* Charts stack one below the other, each full width and left-aligned
+           with the cards above and below it. */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: clamp(16px, 2vw, 24px);
+            align-items: stretch;
+        }
+
+        select {
+            padding: 8px 32px 8px 13px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface-2);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            max-width: 100%;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238898aa' stroke-width='3' stroke-linecap='round'><path d='M6 9l6 6 6-6'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            transition: border-color .2s ease, box-shadow .2s ease;
+        }
+
+        select:hover { border-color: var(--primary); }
+
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(94, 114, 228, .15);
+        }
+
+        .pie-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pie-note {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            padding: 4px 11px;
+            border-radius: 999px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+        }
+
+        .canvas-wrap {
+            position: relative;
+            width: 100%;
+            height: clamp(250px, 40vh, 360px);
+        }
+
+        .canvas-wrap.tall { height: clamp(280px, 44vh, 400px); }
+        .canvas-wrap.pie { height: clamp(280px, 42vh, 380px); margin-top: 14px; }
+
+        canvas { max-width: 100%; }
+
+        /* Loading skeleton */
+        .canvas-wrap.loading::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(100deg, transparent 20%, rgba(136, 152, 170, .14) 50%, transparent 80%);
+            background-size: 220% 100%;
+            animation: shimmer 1.3s linear infinite;
+            pointer-events: none;
+        }
+
+        /* Info / CTA card */
+        .cta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .cta p { margin: 8px 0 0; color: var(--text-muted); font-size: 13.5px; max-width: 62ch; }
+
+        .to-top {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 20px;
+            border-radius: 999px;
+            background: var(--grad-primary);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(94, 114, 228, .32);
+            transition: transform .18s ease, box-shadow .25s ease;
+        }
+
+        .to-top:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(94, 114, 228, .45);
+        }
+
+        .to-top:hover svg { animation: nudge .6s ease; }
+        .to-top:active { transform: translateY(0) scale(.98); }
+
+        .footer-credit {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin: 4px 0 0;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .footer-credit a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color .2s ease;
+        }
+
+        .footer-credit a:hover { color: var(--primary-dk); text-decoration: underline; }
+
+        .scrim {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(23, 43, 77, .55);
+            backdrop-filter: blur(2px);
+            z-index: 45;
+            animation: fade .25s ease;
+        }
+
+        /* ============================================================
+           Motion
+           ============================================================ */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(14px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+        @keyframes pop {
+            0% { transform: rotate(45deg) scale(.2); }
+            100% { transform: rotate(45deg) scale(1); }
+        }
+
+        @keyframes beat {
+            0%, 100% { transform: scale(1); }
+            14% { transform: scale(1.22); }
+            28% { transform: scale(1); }
+            42% { transform: scale(1.18); }
+            60% { transform: scale(1); }
+        }
+
+        @keyframes shimmer {
+            from { background-position: 140% 0; }
+            to { background-position: -40% 0; }
+        }
+
+        @keyframes nudge {
+            0%, 100% { transform: translateY(0); }
+            45% { transform: translateY(-3px); }
+        }
+
+        .reveal {
+            opacity: 0;
+            animation: fadeUp .5s cubic-bezier(.2, .7, .3, 1) forwards;
+        }
+
+        .content > *:nth-child(1) .reveal, .reveal.d1 { animation-delay: .04s; }
+        .reveal.d2 { animation-delay: .1s; }
+        .reveal.d3 { animation-delay: .16s; }
+        .reveal.d4 { animation-delay: .22s; }
+        .reveal.d5 { animation-delay: .28s; }
+        .reveal.d6 { animation-delay: .34s; }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 1040px) {
+            :root { --sidebar-w: 232px; }
+            .language-buttons { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 880px) {
+            :root { --hero-h: 190px; }
+
+            .dashboard-container {
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-areas: "header" "main";
+            }
+
+            .menu-btn { display: inline-flex; }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: min(85vw, 310px);
+                transform: translateX(-102%);
+                transition: transform .3s cubic-bezier(.4, 0, .2, 1);
+                z-index: 50;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+                box-shadow: 0 0 60px rgba(0, 0, 0, .3);
+            }
+
+            body.nav-open { overflow: hidden; }
+            body.nav-open .scrim { display: block; }
+
+            .language-buttons { grid-template-columns: 1fr 1fr; }
+            .breadcrumb, .header-credit { display: none; }
+        }
+
+        @media (max-width: 620px) {
+            :root { --hero-h: 168px; --header-h: 62px; }
+
+            body { font-size: 14px; }
+            .stats { grid-template-columns: 1fr 1fr; }
+            .stat-card { padding: 14px; }
+            .stat-ico { width: 38px; height: 38px; flex-basis: 38px; }
+            .stat-card .value { font-size: 19px; }
+            /* Wrap rather than truncate the footnote on narrow cards */
+            .stat-foot { font-size: 11px; white-space: normal; flex-wrap: wrap; }
+            .card-desc { font-size: 12.5px; margin-bottom: 12px; }
+            .canvas-wrap, .canvas-wrap.tall { height: clamp(230px, 46vh, 300px); }
+            .canvas-wrap.pie { height: clamp(300px, 52vh, 360px); }
+            .cta { flex-direction: column; align-items: flex-start; }
+            .to-top { width: 100%; justify-content: center; }
+            .footer-credit { justify-content: center; text-align: center; }
+        }
+
+        /* Only the very narrowest phones drop the stat row to one column -
+           360-414px devices keep the tighter 2-up grid. */
+        @media (max-width: 340px) {
+            .stats { grid-template-columns: 1fr; }
+            .language-buttons { grid-template-columns: 1fr; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: .001ms !important;
+            }
+            html { scroll-behavior: auto; }
+            .reveal { opacity: 1; }
+        }
+    </style>
+</head>
+<body id="top">
+    <div class="scrim" id="scrim" onclick="closeNav()"></div>
+
+    <div class="dashboard-container">
+        <!-- ==================== Sidebar ==================== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <span class="brand-mark">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 3v18h18"></path>
+                        <path d="m7 14 3.5-4 3 3L20 6"></path>
+                    </svg>
+                </span>
+                <span class="brand-text">
+                    <strong>Lang Trends</strong>
+                    <small>Dashboard</small>
+                </span>
+            </div>
+
+            <p class="nav-heading">Sections</p>
+            <nav class="nav-list">
+                <a class="nav-link active" href="#overview" data-view="overview">
+                    <span class="nav-ico i-primary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="9"></rect>
+                            <rect x="14" y="3" width="7" height="5"></rect>
+                            <rect x="14" y="12" width="7" height="9"></rect>
+                            <rect x="3" y="16" width="7" height="5"></rect>
+                        </svg>
+                    </span>
+                    Overview
+                </a>
+                <a class="nav-link" href="#trends" data-view="trends">
+                    <span class="nav-ico i-info">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m3 16 5-6 4 4 8-9"></path>
+                            <path d="M16 5h4v4"></path>
+                        </svg>
+                    </span>
+                    Trends
+                </a>
+                <a class="nav-link" href="#monthly" data-view="monthly">
+                    <span class="nav-ico i-success">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                            <path d="M5 20V10M12 20V4M19 20v-7"></path>
+                        </svg>
+                    </span>
+                    Monthly
+                </a>
+                <a class="nav-link" href="#distribution" data-view="distribution">
+                    <span class="nav-ico i-warning">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3a9 9 0 1 0 9 9h-9V3z"></path>
+                        </svg>
+                    </span>
+                    Distribution
+                </a>
+            </nav>
+
+            <div class="sidebar-divider"></div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="selectTopFive()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m12 3 2.6 5.6 6.4.8-4.7 4.3 1.3 6.3L12 17l-5.6 3 1.3-6.3L3 9.4l6.4-.8L12 3z"></path>
+                    </svg>
+                    Top 5
+                </button>
+                <button class="btn btn-ghost" onclick="clearAll()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                        <path d="M18 6 6 18M6 6l12 12"></path>
+                    </svg>
+                    Clear
+                </button>
+            </div>
+
+            <div class="lang-panel">
+                <div class="lang-panel-head">
+                    <p class="nav-heading">Languages</p>
+                    <span class="count-pill" id="selectedPill">0 picked</span>
+                </div>
+
+                <div class="search-box">
+                    <input type="search" id="langSearch" placeholder="Search language..." autocomplete="off" aria-label="Search languages" />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m20 20-3.5-3.5"></path>
+                    </svg>
+                </div>
+
+                <div class="language-buttons" id="languageButtons"></div>
+            </div>
+
+            <button class="btn btn-accent" onclick="compareSelected()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 18V9M10 18V5M16 18v-6M22 18H2"></path>
+                </svg>
+                Compare Selected
+            </button>
+        </aside>
+
+        <!-- ==================== Header ==================== -->
+        <header class="header">
+            <div class="header-left">
+                <button class="icon-btn menu-btn" id="menuBtn" onclick="toggleNav()" aria-label="Toggle language panel">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                        <path d="M3 6h18M3 12h18M3 18h18"></path>
+                    </svg>
+                </button>
+                <div>
+                    <div class="breadcrumb">Dashboard <span>/</span> <span id="crumb">Overview</span></div>
+                    <h1>Programming Language Trends</h1>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="icon-btn theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark mode">
+                    <svg class="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg class="icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- ==================== Main ==================== -->
+        <main class="main">
+            <div class="hero" aria-hidden="true"></div>
+
+            <div class="hero-copy">
+                <h2 id="heroTitle">Language popularity, month by month</h2>
+                <p id="heroDesc">Compare how programming languages trend across time, drawn live from Stack&nbsp;Overflow tag activity.</p>
+            </div>
+
+            <div class="content" id="content">
+                <!-- Stat cards -->
+                <section class="stats" data-section="stats">
+                    <div class="card stat-card reveal d1">
+                        <div class="stat-top">
+                            <div>
+                                <div class="label">Languages</div>
+                                <div class="value" id="statLangs">&mdash;</div>
+                            </div>
+                            <span class="stat-ico i-primary">
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m8 6-6 6 6 6M16 6l6 6-6 6"></path>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="stat-foot" id="footLangs">Tracked in this dataset</div>
+                    </div>
+
+                    <div class="card stat-card reveal d2">
+                        <div class="stat-top">
+                            <div>
+                                <div class="label">Months tracked</div>
+                                <div class="value" id="statMonths">&mdash;</div>
+                            </div>
+                            <span class="stat-ico i-info">
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                                    <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                                    <path d="M3 10h18M8 3v4M16 3v4"></path>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="stat-foot" id="footMonths">Full reporting window</div>
+                    </div>
+
+                    <div class="card stat-card reveal d3">
+                        <div class="stat-top">
+                            <div>
+                                <div class="label">Most popular</div>
+                                <div class="value" id="statTop">&mdash;</div>
+                            </div>
+                            <span class="stat-ico i-success">
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m12 3 2.6 5.6 6.4.8-4.7 4.3 1.3 6.3L12 17l-5.6 3 1.3-6.3L3 9.4l6.4-.8L12 3z"></path>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="stat-foot" id="footTop">Highest share overall</div>
+                    </div>
+
+                    <div class="card stat-card reveal d4">
+                        <div class="stat-top">
+                            <div>
+                                <div class="label">Selected</div>
+                                <div class="value" id="statSelected">&mdash;</div>
+                            </div>
+                            <span class="stat-ico i-warning">
+                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 6 9 17l-5-5"></path>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="stat-foot" id="footSelected">Currently on the charts</div>
+                    </div>
+                </section>
+
+                <!-- Line chart (feature card) -->
+                <section class="card card-feature reveal d4" data-section="trends">
+                    <div class="card-head">
+                        <div>
+                            <p class="eyebrow">Overview</p>
+                            <h2>Trends Over Time</h2>
+                        </div>
+                        <span class="badge">Line Chart</span>
+                    </div>
+                    <p class="card-desc">Track how the selected programming languages have risen and fallen in popularity over time. Useful for spotting long-term momentum and making data-driven language choices.</p>
+                    <div class="canvas-wrap tall loading" id="lineWrap"><canvas id="lineChart"></canvas></div>
+                </section>
+
+                <!-- Bar + doughnut -->
+                <section class="chart-grid">
+                    <div class="card reveal d5" data-section="monthly">
+                        <div class="card-head">
+                            <div>
+                                <p class="eyebrow">Performance</p>
+                                <h2>Monthly Popularity</h2>
+                            </div>
+                            <span class="badge b-success">Bar Chart</span>
+                        </div>
+                        <p class="card-desc">A month-by-month breakdown of language usage, ideal for spotting short-term shifts and seasonal patterns.</p>
+                        <div class="canvas-wrap loading" id="barWrap"><canvas id="barChart"></canvas></div>
+                    </div>
+
+                    <div class="card reveal d6" data-section="distribution">
+                        <div class="card-head">
+                            <div>
+                                <p class="eyebrow">Share</p>
+                                <h2>Distribution by Month</h2>
+                            </div>
+                            <span class="badge b-info">Doughnut</span>
+                        </div>
+                        <p class="card-desc">Pick a month to see how the share of each language was distributed during that period.</p>
+                        <div class="pie-controls">
+                            <select id="monthSelect" aria-label="Select month"></select>
+                            <span class="pie-note" id="pieNote"></span>
+                        </div>
+                        <div class="canvas-wrap pie loading" id="pieWrap"><canvas id="pieChart"></canvas></div>
+                    </div>
+                </section>
+
+                <!-- CTA -->
+                <section class="card cta reveal d6" data-section="cta">
+                    <div>
+                        <div class="card-head"><h2>Explore Language Trends Interactively</h2></div>
+                        <p>Use the controls in the side panel to select and compare languages. Analyse trends over time, monthly popularity, and per-month distribution &mdash; all from one dashboard.</p>
+                    </div>
+                    <a class="to-top" href="#top">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 19V5M5 12l7-7 7 7"></path>
+                        </svg>
+                        Back to top
+                    </a>
+                </section>
+
+                <p class="footer-credit">
+                    <span>&copy; Language Trends Dashboard</span>
+                    <span>dev : <a href="https://rr-developer.netlify.app/" target="_blank" rel="noopener noreferrer">RaviRajput</a> <span class="heart">&#10084;&#65039;</span></span>
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let fullData = {};
+        let topLanguages = [];
+        let lineChartInstance, barChartInstance, pieChartInstance;
+
+        // Backend base URL: same origin when served by Flask, otherwise the
+        // local dev server (works when index.html is opened directly via file://).
+        const API_BASE = (window.location.protocol === "http:" || window.location.protocol === "https:")
+            ? ""
+            : "http://127.0.0.1:5000";
+
+        const API_URL = `${API_BASE}/api/data`;
+        const PIE_API_URL = `${API_BASE}/api/pie_data`;
+
+        /* ---------- Theme toggle ---------- */
+        function currentTheme() {
+            const explicit = document.documentElement.getAttribute("data-theme");
+            if (explicit) return explicit;
+            return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+
+        function toggleTheme() {
+            const next = currentTheme() === "dark" ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", next);
+            document.querySelector('meta[name="theme-color"]')
+                .setAttribute("content", next === "dark" ? "#0b1020" : "#172b4d");
+            try { localStorage.setItem("theme", next); } catch (e) { /* storage blocked */ }
+            refreshChartTheme();
+        }
+
+        // Charts paint their own axis/legend colours, so they need repainting
+        // whenever the palette changes. The line chart sits on the dark feature
+        // card, so it always uses the on-dark colours.
+        function refreshChartTheme() {
+            if (lineChartInstance) {
+                lineChartInstance.options = baseOptions(true);
+                lineChartInstance.update();
+            }
+            if (barChartInstance) {
+                barChartInstance.options = baseOptions(false);
+                barChartInstance.update();
+            }
+            if (pieChartInstance) {
+                pieChartInstance.options.plugins.legend.labels.color = cssVar("--text-muted", "#8898aa");
+                pieChartInstance.options.plugins.legend.position =
+                    window.innerWidth < 620 ? "bottom" : "right";
+                pieChartInstance.update();
+            }
+        }
+
+        // Follow the OS while the user has not made an explicit choice
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+            if (!document.documentElement.getAttribute("data-theme")) refreshChartTheme();
+        });
+
+        /* ---------- Mobile nav ---------- */
+        function toggleNav() {
+            const open = document.getElementById("sidebar").classList.toggle("open");
+            document.body.classList.toggle("nav-open", open);
+        }
+
+        function closeNav() {
+            document.getElementById("sidebar").classList.remove("open");
+            document.body.classList.remove("nav-open");
+        }
+
+        document.addEventListener("keydown", e => { if (e.key === "Escape") closeNav(); });
+        window.addEventListener("resize", () => { if (window.innerWidth > 880) closeNav(); });
+
+        /* ---------- View routing ----------
+           Overview shows the whole dashboard; every other entry opens that one
+           section as a full-page view with its own heading. */
+        const VIEWS = {
+            overview: {
+                label: "Overview",
+                title: "Language popularity, month by month",
+                desc: "Compare how programming languages trend across time, drawn live from Stack Overflow tag activity.",
+                sections: ["stats", "trends", "monthly", "distribution", "cta"]
+            },
+            trends: {
+                label: "Trends",
+                title: "Trends over time",
+                desc: "Track how the selected programming languages have risen and fallen in popularity across every month on record.",
+                sections: ["trends"]
+            },
+            monthly: {
+                label: "Monthly",
+                title: "Monthly popularity",
+                desc: "A month-by-month breakdown of language usage, ideal for spotting short-term shifts and seasonal patterns.",
+                sections: ["monthly"]
+            },
+            distribution: {
+                label: "Distribution",
+                title: "Distribution by month",
+                desc: "See how the share of every tracked language was distributed in any single month.",
+                sections: ["distribution"]
+            }
+        };
+
+        let currentView = "overview";
+
+        function showView(name) {
+            const key = VIEWS[name] ? name : "overview";
+            const view = VIEWS[key];
+            currentView = key;
+
+            document.querySelectorAll("[data-section]").forEach(section => {
+                section.hidden = !view.sections.includes(section.dataset.section);
+            });
+
+            // The bar/doughnut wrapper is only needed when one of them is on screen
+            const grid = document.querySelector(".chart-grid");
+            grid.hidden = !["monthly", "distribution"].some(s => view.sections.includes(s));
+
+            // Solo views let the single card fill the screen
+            const solo = key !== "overview";
+            document.getElementById("content").classList.toggle("solo", solo);
+            // Solo views drop the hero copy - the card carries its own heading,
+            // so showing both would repeat the same title twice.
+            document.body.classList.toggle("solo", solo);
+
+            document.getElementById("crumb").textContent = view.label;
+            document.getElementById("heroTitle").textContent = view.title;
+            document.getElementById("heroDesc").textContent = view.desc;
+            document.title = `${view.label} · Programming Language Trends`;
+
+            document.querySelectorAll(".nav-link").forEach(link => {
+                const on = link.dataset.view === key;
+                link.classList.toggle("active", on);
+                if (on) link.setAttribute("aria-current", "page");
+                else link.removeAttribute("aria-current");
+            });
+
+            window.scrollTo({ top: 0 });
+
+            // A chart sized while its container was hidden measures 0, so give
+            // every visible chart a chance to re-measure.
+            requestAnimationFrame(() => {
+                [lineChartInstance, barChartInstance, pieChartInstance]
+                    .forEach(chart => { if (chart) chart.resize(); });
+            });
+
+            closeNav();
+        }
+
+        document.querySelectorAll(".nav-link").forEach(link => {
+            link.addEventListener("click", e => {
+                e.preventDefault();
+                const view = link.dataset.view;
+                if (location.hash.slice(1) !== view) location.hash = view;
+                else showView(view);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            });
+        });
+
+        // Keep the browser back/forward buttons and pasted #hash links working
+        window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
+        showView(location.hash.slice(1));
+
+        /* ---------- Data ---------- */
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                const labels = data.year_month;
+                delete data.year_month;
+
+                fullData = { labels, data };
+
+                const totals = Object.entries(data).map(([lang, values]) => ({
+                    lang,
+                    total: values.reduce((a, b) => a + b, 0)
+                }));
+
+                topLanguages = totals.sort((a, b) => b.total - a.total).map(obj => obj.lang);
+
+                document.getElementById("statLangs").textContent = topLanguages.length;
+                document.getElementById("statMonths").textContent = labels.length;
+                document.getElementById("statTop").textContent = topLanguages[0] || "—";
+
+                renderSummary(labels, data);
+                renderLanguageButtons(topLanguages);
+                populateMonthDropdown(labels);
+
+                // Automatically select and compare the top 5 languages on initial load
+                selectTopFive();
+
+            } catch (error) {
+                console.error("Failed to fetch data:", error);
+                document.querySelectorAll(".canvas-wrap").forEach(w => w.classList.remove("loading"));
+            }
+        }
+
+        // Fills the stat-card footers with real month-over-month movement
+        function renderSummary(labels, data) {
+            const first = labels[0];
+            const last = labels[labels.length - 1];
+            document.getElementById("footMonths").textContent = `${first} — ${last}`;
+            document.getElementById("footLangs").textContent = `Tracked across ${labels.length} months`;
+
+            const top = topLanguages[0];
+            const series = top ? data[top] : null;
+            const foot = document.getElementById("footTop");
+
+            if (series && series.length > 1) {
+                const now = series[series.length - 1];
+                const prev = series[series.length - 2];
+                const change = prev ? ((now - prev) / prev) * 100 : 0;
+                const dir = change > 0.05 ? "up" : change < -0.05 ? "down" : "flat";
+                const arrow = dir === "up" ? "▲" : dir === "down" ? "▼" : "▬";
+                foot.innerHTML = `<span class="delta ${dir}">${arrow} ${Math.abs(change).toFixed(2)}%</span> since ${labels[labels.length - 2]}`;
+            }
+        }
+
+        function renderLanguageButtons(languages) {
+            const container = document.getElementById("languageButtons");
+            container.innerHTML = "";
+
+            languages.forEach(lang => {
+                const item = document.createElement("label");
+                item.className = "lang-btn";
+                item.dataset.lang = lang.toLowerCase();
+
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.id = `lang-${lang}`;
+                checkbox.addEventListener("change", updateSelectedCount);
+                item.appendChild(checkbox);
+
+                const label = document.createElement("span");
+                label.textContent = lang;
+                item.appendChild(label);
+
+                container.appendChild(item);
+            });
+        }
+
+        document.getElementById("langSearch").addEventListener("input", e => {
+            const q = e.target.value.trim().toLowerCase();
+            let visible = 0;
+
+            document.querySelectorAll(".lang-btn").forEach(item => {
+                const match = item.dataset.lang.includes(q);
+                item.style.display = match ? "" : "none";
+                if (match) visible++;
+            });
+
+            const container = document.getElementById("languageButtons");
+            let empty = container.querySelector(".no-results");
+
+            if (!visible) {
+                if (!empty) {
+                    empty = document.createElement("p");
+                    empty.className = "no-results";
+                    container.appendChild(empty);
+                }
+                empty.textContent = `No language matches "${e.target.value.trim()}"`;
+            } else if (empty) {
+                empty.remove();
+            }
+        });
+
+        function selectedLanguages() {
+            return Array.from(document.querySelectorAll('.lang-btn input[type="checkbox"]:checked'))
+                .map(checkbox => checkbox.id.replace('lang-', ''));
+        }
+
+        function updateSelectedCount() {
+            const n = selectedLanguages().length;
+            document.getElementById("statSelected").textContent = n;
+            document.getElementById("selectedPill").textContent = `${n} picked`;
+            document.getElementById("footSelected").textContent =
+                topLanguages.length ? `of ${topLanguages.length} languages` : "Currently on the charts";
+        }
+
+        function compareSelected() {
+            const selected = selectedLanguages();
+            updateSelectedCount();
+
+            if (selected.length === 0) {
+                alert("Please select at least one language.");
+                return;
+            }
+
+            const { labels, data } = fullData;
+
+            const datasets = selected.map((lang, index) => ({
+                label: lang,
+                data: data[lang],
+                borderColor: getHSLColor(index),
+                backgroundColor: getHSLColor(index, 0.25),
+                borderWidth: 2.5,
+                borderRadius: 5,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBorderWidth: 2,
+                pointHoverBorderColor: "#fff",
+                fill: false,
+                tension: 0.4
+            }));
+
+            renderLineChart(labels, datasets);
+            renderBarChart(labels, datasets);
+            drawPieForSelection();
+            closeNav();
+        }
+
+        function selectTopFive() {
+            const checkboxes = document.querySelectorAll('.lang-btn input[type="checkbox"]');
+            const top5 = topLanguages.slice(0, 5);
+
+            checkboxes.forEach(checkbox => {
+                const lang = checkbox.id.replace('lang-', '');
+                checkbox.checked = top5.includes(lang);
+            });
+
+            compareSelected();
+        }
+
+        function clearAll() {
+            document.querySelectorAll('.lang-btn input[type="checkbox"]')
+                .forEach(checkbox => { checkbox.checked = false; });
+            updateSelectedCount();
+            drawPieForSelection();
+        }
+
+        // Brand-led palette, cycling through the Argon-style accents before
+        // falling back to generated hues for longer selections.
+        const PALETTE = ["#5e72e4", "#2dce89", "#fb6340", "#11cdef", "#f5365c", "#8965e0", "#ffd600"];
+
+        function getHSLColor(index, alpha = 1) {
+            if (index < PALETTE.length) {
+                const hex = PALETTE[index];
+                if (alpha === 1) return hex;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            }
+            const hue = ((index - PALETTE.length) * 47 + 210) % 360;
+            return `hsla(${hue}, 68%, 58%, ${alpha})`;
+        }
+
+        // The month's full distribution, kept so the doughnut can be re-filtered
+        // when the selection changes without re-hitting the API.
+        let pieMonthData = null;
+
+        async function fetchPieData(month) {
+            try {
+                const response = await fetch(`${PIE_API_URL}?month=${month}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error("Pie chart error:", data.error);
+                    return;
+                }
+
+                pieMonthData = data;
+                drawPieForSelection();
+            } catch (error) {
+                console.error("Error loading pie data:", error);
+            }
+        }
+
+        // Narrows the month's distribution to the languages the user picked.
+        // With nothing selected it falls back to the full distribution.
+        function drawPieForSelection() {
+            if (!pieMonthData) return;
+
+            const { labels, values } = pieMonthData;
+            const picked = selectedLanguages();
+            const keep = picked.length
+                ? labels.map((lang, i) => [lang, values[i]]).filter(([lang]) => picked.includes(lang))
+                : labels.map((lang, i) => [lang, values[i]]);
+
+            if (!keep.length) return;
+
+            const note = document.getElementById("pieNote");
+            note.textContent = picked.length
+                ? `Showing ${keep.length} selected ${keep.length === 1 ? "language" : "languages"}`
+                : `Showing all ${keep.length} languages`;
+
+            renderPieChart(keep.map(e => e[0]), keep.map(e => e[1]), picked.length > 0, picked);
+        }
+
+        /* ---------- Charts ---------- */
+        function cssVar(name, fallback) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+        }
+
+        // onDark: the chart sits on the dark feature card, so it needs light
+        // axis labels regardless of the page theme.
+        function baseOptions(onDark) {
+            const isSmall = window.innerWidth < 620;
+            const tick = onDark ? "rgba(255,255,255,.62)" : cssVar("--text-muted", "#8898aa");
+            const grid = onDark ? "rgba(255,255,255,.1)" : cssVar("--border", "#e9ecef");
+            const legend = onDark ? "rgba(255,255,255,.85)" : cssVar("--text", "#525f7f");
+
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 700, easing: "easeOutQuart" },
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                    legend: {
+                        position: isSmall ? "bottom" : "top",
+                        align: "end",
+                        labels: {
+                            color: legend,
+                            boxWidth: 8,
+                            boxHeight: 8,
+                            padding: 14,
+                            usePointStyle: true,
+                            pointStyle: "circle",
+                            font: { family: "Inter, sans-serif", size: isSmall ? 11 : 12, weight: "600" }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: "rgba(23,43,77,.95)",
+                        titleFont: { family: "Inter, sans-serif", size: 12, weight: "700" },
+                        bodyFont: { family: "Open Sans, sans-serif", size: 12 },
+                        padding: 12,
+                        cornerRadius: 10,
+                        boxPadding: 5,
+                        usePointStyle: true,
+                        callbacks: {
+                            label: ctx => ` ${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(2)}%`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false, drawBorder: false },
+                        border: { display: false },
+                        ticks: {
+                            color: tick,
+                            maxRotation: 55,
+                            autoSkip: true,
+                            maxTicksLimit: isSmall ? 6 : 14,
+                            font: { family: "Inter, sans-serif", size: isSmall ? 10 : 11 }
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: grid, drawBorder: false, drawTicks: false },
+                        border: { display: false },
+                        ticks: {
+                            color: tick,
+                            padding: 8,
+                            font: { family: "Inter, sans-serif", size: isSmall ? 10 : 11 },
+                            callback: v => v + "%"
+                        }
+                    }
+                }
+            };
+        }
+
+        function renderLineChart(labels, datasets) {
+            const ctx = document.getElementById("lineChart").getContext("2d");
+            document.getElementById("lineWrap").classList.remove("loading");
+            if (lineChartInstance) lineChartInstance.destroy();
+            lineChartInstance = new Chart(ctx, {
+                type: "line",
+                data: { labels, datasets },
+                options: baseOptions(true)
+            });
+        }
+
+        function renderBarChart(labels, datasets) {
+            const ctx = document.getElementById("barChart").getContext("2d");
+            document.getElementById("barWrap").classList.remove("loading");
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels,
+                    datasets: datasets.map((d, i) => ({
+                        ...d,
+                        backgroundColor: getHSLColor(i, 0.85),
+                        hoverBackgroundColor: getHSLColor(i),
+                        // The line dataset's 2.5px border would swallow a bar
+                        // this narrow (37 months x N languages), leaving it invisible.
+                        borderWidth: 0,
+                        borderColor: "transparent",
+                        borderRadius: 3,
+                        borderSkipped: false,
+                        barPercentage: 0.95,
+                        categoryPercentage: 0.88,
+                        fill: true
+                    }))
+                },
+                options: baseOptions(false)
+            });
+        }
+
+        // filtered: the ring shows only the picked languages, so each slice is
+        // reported as its share within that group (the raw % rides along too).
+        // Sums only the slices the legend has left switched on, so the
+        // percentages still add up to 100% after hiding one.
+        function visibleTotal(chart) {
+            return chart.data.datasets[0].data
+                .reduce((sum, v, i) => sum + (chart.getDataVisibility(i) ? v : 0), 0);
+        }
+
+        // Writes each slice's share onto the ring. Slices too thin to hold the
+        // text are skipped - the legend carries their percentage instead.
+        const sliceLabels = {
+            id: "sliceLabels",
+            afterDatasetsDraw(chart) {
+                const meta = chart.getDatasetMeta(0);
+                const values = chart.data.datasets[0].data;
+                const total = visibleTotal(chart);
+                if (!total || !meta.data.length) return;
+
+                const first = meta.data[0];
+                const band = first.outerRadius - first.innerRadius;
+                const size = Math.max(9, Math.min(15, Math.round(band * 0.34)));
+
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.font = `700 ${size}px Inter, "Open Sans", sans-serif`;
+
+                meta.data.forEach((arc, i) => {
+                    if (!chart.getDataVisibility(i)) return;
+
+                    // One decimal, same as the legend, so the two never disagree
+                    const pct = (values[i] / total) * 100;
+                    const text = `${pct.toFixed(1)}%`;
+
+                    // Only label a slice whose arc is genuinely wider than the text
+                    const midRadius = (arc.outerRadius + arc.innerRadius) / 2;
+                    const arcLength = ((arc.endAngle - arc.startAngle)) * midRadius;
+                    if (arcLength < ctx.measureText(text).width + 10) return;
+                    if (band < size + 4) return;
+
+                    const { x, y } = arc.getCenterPoint();
+                    ctx.shadowColor = "rgba(0,0,0,.5)";
+                    ctx.shadowBlur = 4;
+                    ctx.fillStyle = "#fff";
+                    ctx.fillText(text, x, y);
+                });
+
+                ctx.restore();
+            }
+        };
+
+        // order: when filtering, slices take their colour from the selection
+        // order so they match the line and bar charts.
+        function renderPieChart(labels, values, filtered, order) {
+            const ctx = document.getElementById("pieChart").getContext("2d");
+            const isSmall = window.innerWidth < 620;
+            const total = values.reduce((a, b) => a + b, 0);
+            document.getElementById("pieWrap").classList.remove("loading");
+            if (pieChartInstance) pieChartInstance.destroy();
+            pieChartInstance = new Chart(ctx, {
+                type: "doughnut",
+                plugins: [sliceLabels],
+                data: {
+                    labels,
+                    datasets: [{
+                        data: values,
+                        borderWidth: 0,
+                        hoverOffset: 10,
+                        backgroundColor: labels.map(lang => {
+                            const source = filtered && order && order.length ? order : topLanguages;
+                            const i = source.indexOf(lang);
+                            return getHSLColor(i >= 0 ? i : 0, 0.9);
+                        })
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: "62%",
+                    animation: { duration: 700, easing: "easeOutQuart" },
+                    plugins: {
+                        legend: {
+                            position: isSmall ? "bottom" : "right",
+                            labels: {
+                                color: cssVar("--text-muted", "#8898aa"),
+                                boxWidth: 8,
+                                boxHeight: 8,
+                                padding: 10,
+                                usePointStyle: true,
+                                pointStyle: "circle",
+                                font: { family: "Inter, sans-serif", size: isSmall ? 10 : 11 },
+                                generateLabels: chart => {
+                                    const ds = chart.data.datasets[0];
+                                    const sum = visibleTotal(chart);
+                                    return chart.data.labels.map((label, i) => {
+                                        const pct = sum ? (ds.data[i] / sum) * 100 : 0;
+                                        return {
+                                            text: `${label}  ${pct.toFixed(1)}%`,
+                                            fillStyle: ds.backgroundColor[i],
+                                            strokeStyle: ds.backgroundColor[i],
+                                            lineWidth: 0,
+                                            pointStyle: "circle",
+                                            hidden: !chart.getDataVisibility(i),
+                                            index: i
+                                        };
+                                    });
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: "rgba(23,43,77,.95)",
+                            padding: 12,
+                            cornerRadius: 10,
+                            usePointStyle: true,
+                            callbacks: {
+                                label: ctx => {
+                                    const raw = Number(ctx.parsed);
+                                    if (!filtered) return ` ${ctx.label}: ${raw.toFixed(2)}%`;
+                                    const share = total ? (raw / total) * 100 : 0;
+                                    return ` ${ctx.label}: ${share.toFixed(1)}% of selected`;
+                                },
+                                afterLabel: ctx => filtered
+                                    ? `   ${Number(ctx.parsed).toFixed(2)}% of all tags`
+                                    : undefined
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function populateMonthDropdown(months) {
+            const dropdown = document.getElementById("monthSelect");
+            dropdown.innerHTML = "";
+
+            months.forEach(month => {
+                const option = document.createElement("option");
+                option.value = month;
+                option.textContent = month;
+                dropdown.appendChild(option);
+            });
+
+            dropdown.value = months[months.length - 1];
+            dropdown.addEventListener("change", () => fetchPieData(dropdown.value));
+
+            fetchPieData(months[months.length - 1]);
+        }
+
+        // Re-tune legend placement / tick density when the breakpoint changes
+        let resizeTimer;
+        window.addEventListener("resize", () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(refreshChartTheme, 200);
+        });
+
+        fetchData();
+    </script>
+</body>
+</html>

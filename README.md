@@ -38,12 +38,16 @@ No build step and no `node_modules` — the frontend is a single self-contained 
 
 ```
 StackPulse/
+├── api/
+│   └── index.py             # Vercel serverless entrypoint (re-exports the Flask app)
 ├── backend/
 │   ├── app.py               # Flask API + static host for the frontend
 │   ├── computed_data.csv    # 37 months x 30 languages
 │   └── requirements.txt
 ├── frontend/
 │   └── index.html           # Entire UI: markup, styles, and charts
+├── requirements.txt         # Dependencies for the Vercel build
+├── vercel.json              # Routing + build configuration
 └── README.md
 ```
 
@@ -116,6 +120,29 @@ year_month,android,angular,arrays,...,typescript
 ```
 
 To use your own data, replace the CSV keeping that shape — the backend reads the column names at runtime, so the frontend picks up new languages automatically with no code changes.
+
+---
+
+## Deploying to Vercel
+
+The repo is already configured — no code changes are needed to deploy.
+
+```bash
+npm i -g vercel     # once
+vercel              # preview deployment
+vercel --prod       # production
+```
+
+Or import the GitHub repo at [vercel.com/new](https://vercel.com/new) and deploy with the default settings; `vercel.json` supplies the rest.
+
+**How it fits together**
+
+- `api/index.py` is the serverless entrypoint. Vercel's Python runtime looks for a WSGI callable named `app`, so this file adds `backend/` to `sys.path` and re-exports the same Flask app used locally — the application code is not duplicated.
+- `vercel.json` sends `/api/*` and `/pie_data` to that function, serves `/` from `frontend/index.html`, and serves everything else as a static file.
+- `includeFiles: ["backend/**"]` bundles `computed_data.csv` with the function; without it the CSV would be missing at runtime and every endpoint would return "CSV file not found".
+- The frontend needs no environment variable: on `https://` it uses same-origin relative URLs, so `/api/data` resolves to the deployed function automatically.
+
+Nothing about local development changes — `python backend/app.py` still works exactly as before.
 
 ---
 

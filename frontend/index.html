@@ -1494,7 +1494,7 @@
                 barChartInstance.update();
             }
             if (pieChartInstance) {
-                pieChartInstance.options.plugins.legend.labels.color = cssVar("--text-muted", "#8898aa");
+                pieChartInstance.options.plugins.legend.labels.color = cssVar("--text", "#525f7f");
                 pieChartInstance.options.plugins.legend.position =
                     window.innerWidth < 620 ? "bottom" : "right";
                 pieChartInstance.update();
@@ -2033,13 +2033,13 @@
                         legend: {
                             position: isSmall ? "bottom" : "right",
                             labels: {
-                                color: cssVar("--text-muted", "#8898aa"),
+                                color: cssVar("--text", "#525f7f"),
                                 boxWidth: 8,
                                 boxHeight: 8,
-                                padding: 10,
+                                padding: 11,
                                 usePointStyle: true,
                                 pointStyle: "circle",
-                                font: { family: "Inter, sans-serif", size: isSmall ? 10 : 11 },
+                                font: { family: "Inter, sans-serif", size: isSmall ? 11 : 12, weight: "600" },
                                 generateLabels: chart => {
                                     const ds = chart.data.datasets[0];
                                     const sum = visibleTotal(chart);
